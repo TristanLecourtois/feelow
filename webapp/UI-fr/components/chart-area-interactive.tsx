@@ -148,7 +148,7 @@ const periodLabels: Record<string, string> = {
 export function ChartAreaInteractive() {
   const [period, setPeriod] = React.useState("3mo")
   const { ticker, setTicker } = useTicker()
-  const [chartMode, setChartMode] = React.useState<"area" | "candle">("area")
+  const [chartMode, setChartMode] = React.useState<"area" | "candle">("candle")
   const [rawData, setRawData] = React.useState<PricePoint[]>([])
   const [chartData, setChartData] = React.useState<ChartPoint[]>([])
   const [loading, setLoading] = React.useState(true)
