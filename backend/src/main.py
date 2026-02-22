@@ -36,6 +36,7 @@ import os, sys, math, logging
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
+from stock_analysis.api_finbert_transformer import compute_sentiment_score, df
 
 import numpy as np
 import pandas as pd
@@ -313,6 +314,30 @@ async def api_sentiment_ensemble(req: EnsembleRequest):
     except Exception as e:
         logger.error(f"/api/sentiment/ensemble error: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
+
+class SentimentScoreRequest(BaseModel):
+    company: str = Field(..., description="Company name")
+
+class SentimentScoreResponse(BaseModel):
+    company: str
+    score: float
+    news_count: int
+
+@app.post("/api/sentiment/score", response_model=SentimentScoreResponse)
+async def api_sentiment_score(req: SentimentScoreRequest):
+    try:
+        score = compute_sentiment_score(req.company)
+        news_count = len(df[df['selftext'].str.contains(req.company, case=False, na=False)])
+        return SentimentScoreResponse(
+            company=req.company,
+            score=round(score, 4),
+            news_count=news_count
+        )
+    except Exception as e:
+        logger.error(f"/api/sentiment/score error: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 
 
 @app.post("/api/analysis/claude")
