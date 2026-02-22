@@ -41,8 +41,8 @@ _WORKSPACE_ROOT = os.path.abspath(os.path.join(_SRC_DIR, "..", "..", ".."))
 if _WORKSPACE_ROOT not in sys.path:
     sys.path.insert(0, _WORKSPACE_ROOT)
 
-# agent-search directory (contains polymarket_pipeline.py)
-_AGENT_SEARCH_DIR = os.path.join(_SRC_DIR, "agent-search")
+# agent_search directory (contains polymarket_pipeline.py)
+_AGENT_SEARCH_DIR = os.path.join(_SRC_DIR, "agent_search")
 if _AGENT_SEARCH_DIR not in sys.path:
     sys.path.insert(0, _AGENT_SEARCH_DIR)
 

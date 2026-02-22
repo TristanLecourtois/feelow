@@ -5,12 +5,18 @@ Feelow — Unified Backend API
 FastAPI backend serving:
   • Finance-data routes  (sentiment, price, technicals, agents)
   • Polymarket routes    (agent-search + scoring pipeline)
+  • UI-fr routes         (GET endpoints for the Next.js dashboard)
 
 Run:
     cd backend/src
     uvicorn main:app --host 0.0.0.0 --port 8000 --reload
 
-Frontend routes (used by Streamlit):
+UI-fr routes (used by Next.js frontend — GET):
+    GET  /api/kpis?ticker=X            → price, sentiment, RSI, signal
+    GET  /api/news?ticker=X            → news headlines + sentiment
+    GET  /api/price-history?ticker=X   → OHLCV + technicals
+
+Streamlit routes (used by Streamlit frontend — POST):
     GET  /api/health             → backend health
     GET  /api/config             → config constants
     POST /api/data/load          → price + news + sentiment + technicals
@@ -34,7 +40,7 @@ from typing import Any, Dict, List, Optional
 import numpy as np
 import pandas as pd
 import uvicorn
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
@@ -389,6 +395,122 @@ async def api_pipeline_run(req: PipelineRequest):
             "final_report": "",
             "total_duration_ms": 0,
         }
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+# UI-FR ENDPOINTS (GET — used by the Next.js frontend)
+# ═════════════════════════════════════════════════════════════════════════════
+
+@app.get("/api/kpis")
+async def api_kpis(
+    ticker: str = Query("AAPL", description="Ticker symbol"),
+    period: str = Query("1mo", description="Price history period"),
+):
+    """
+    Dashboard KPIs for UI-fr section-cards:
+    price, pct_change, news_volume, avg_sentiment, signal, rsi.
+    """
+    try:
+        engine = get_engine()
+        interval_map = {"7d": "1h", "1mo": "1d", "3mo": "1d", "6mo": "1d", "1y": "1wk"}
+        interval = interval_map.get(period, "1d")
+
+        loader = MarketDataLoader(ticker)
+        current_price = loader.get_current_price()
+        _, pct_change = loader.get_price_change(7)
+
+        price_df = loader.get_price_history(period=period, interval=interval)
+        rsi_val = 0.0
+        if not price_df.empty:
+            price_df = TechnicalIndicators.add_all(price_df)
+            if "RSI" in price_df.columns:
+                rsi_val = float(price_df["RSI"].iloc[-1])
+                if math.isnan(rsi_val):
+                    rsi_val = 0.0
+
+        news_df = NewsIngestor(ticker).fetch_news()
+        news_volume = 0
+        avg_sentiment = 0.0
+        signal = "NEUTRAL"
+
+        if not news_df.empty and "title" in news_df.columns:
+            headlines = news_df["title"].dropna().tolist()
+            if headlines:
+                sent_df = engine.analyze_headlines(headlines)
+                if not sent_df.empty and "sentiment_numeric" in sent_df.columns:
+                    news_df = news_df.reset_index(drop=True)
+                    news_df["sentiment_numeric"] = sent_df["sentiment_numeric"].values[:len(news_df)]
+                    cutoff = datetime.now() - timedelta(hours=24)
+                    recent = news_df[news_df["published"] > cutoff] if "published" in news_df.columns else news_df
+                    news_volume = len(recent)
+                    if news_volume > 0:
+                        avg_sentiment = float(recent["sentiment_numeric"].mean())
+                        signal = _calc_signal(avg_sentiment)
+
+        return {
+            "ticker": ticker,
+            "price": round(current_price, 2),
+            "pct_change": round(pct_change, 2),
+            "news_volume": news_volume,
+            "avg_sentiment": round(avg_sentiment, 3),
+            "signal": signal,
+            "rsi": round(rsi_val, 1),
+        }
+    except Exception as e:
+        logger.error(f"/api/kpis error: {e}", exc_info=True)
+        return {
+            "ticker": ticker, "price": 0, "pct_change": 0,
+            "news_volume": 0, "avg_sentiment": 0, "signal": "NEUTRAL", "rsi": 0,
+        }
+
+
+@app.get("/api/news")
+async def api_news(ticker: str = Query("AAPL")):
+    """Raw news headlines with FinBERT sentiment for the UI-fr data-table."""
+    try:
+        news_df = NewsIngestor(ticker).fetch_news()
+        if news_df.empty:
+            return []
+
+        if "title" in news_df.columns:
+            headlines = news_df["title"].dropna().tolist()
+            if headlines:
+                engine = get_engine()
+                sent_df = engine.analyze_headlines(headlines)
+                if not sent_df.empty:
+                    news_df = news_df.reset_index(drop=True)
+                    if "label" in sent_df.columns:
+                        news_df["sentiment"] = sent_df["label"].values[:len(news_df)]
+                    if "score" in sent_df.columns:
+                        news_df["confidence"] = sent_df["score"].values[:len(news_df)]
+                    if "sentiment_numeric" in sent_df.columns:
+                        news_df["sentiment_numeric"] = sent_df["sentiment_numeric"].values[:len(news_df)]
+
+        records = _df_to_records(news_df.head(50))
+        return records
+    except Exception as e:
+        logger.error(f"/api/news error: {e}", exc_info=True)
+        return []
+
+
+@app.get("/api/price-history")
+async def api_price_history(
+    ticker: str = Query("AAPL"),
+    period: str = Query("1mo"),
+):
+    """OHLCV + technicals for the UI-fr chart-area-interactive."""
+    try:
+        interval_map = {"7d": "1h", "1mo": "1d", "3mo": "1d", "6mo": "1d", "1y": "1wk"}
+        interval = interval_map.get(period, "1d")
+        loader = MarketDataLoader(ticker)
+        df = loader.get_price_history(period=period, interval=interval)
+        if df.empty:
+            return []
+        df = TechnicalIndicators.add_all(df)
+        return _df_to_records(df)
+    except Exception as e:
+        logger.error(f"/api/price-history error: {e}", exc_info=True)
+        return []
 
 
 # ═════════════════════════════════════════════════════════════════════════════
