@@ -80,7 +80,7 @@ import {
   TabsList,
   TabsTrigger,
 } from "@/components/ui/tabs"
-import { useTicker } from "@/lib/ticker-context"
+import { useTicker, type PolymarketBet } from "@/lib/ticker-context"
 
 /* ─────────────────────── Schema ─────────────────────── */
 export const schema = z.object({
@@ -94,73 +94,22 @@ export const schema = z.object({
 
 type FeedRow = z.infer<typeof schema>
 
-/* ─────────────── Fake Polymarket bets ─────────────── */
-const POLYMARKET_BETS: FeedRow[] = [
-  {
-    id: 1001,
-    header: "Will AAPL close above $270 by March 2026?",
-    type: "Polymarket",
-    sentiment: "Positive",
-    confidence: "72%",
-    published: "2025-06-22 09:15",
-  },
-  {
-    id: 1002,
-    header: "Tesla stock drops 10%+ in February?",
-    type: "Polymarket",
-    sentiment: "Negative",
-    confidence: "58%",
-    published: "2025-06-21 14:30",
-  },
-  {
-    id: 1003,
-    header: "NVIDIA beats Q4 earnings consensus?",
-    type: "Polymarket",
-    sentiment: "Positive",
-    confidence: "84%",
-    published: "2025-06-20 11:00",
-  },
-  {
-    id: 1004,
-    header: "Fed rate cut before April 2026?",
-    type: "Polymarket",
-    sentiment: "Neutral",
-    confidence: "45%",
-    published: "2025-06-19 18:45",
-  },
-  {
-    id: 1005,
-    header: "Bitcoin above $100K by end of Q1?",
-    type: "Polymarket",
-    sentiment: "Positive",
-    confidence: "63%",
-    published: "2025-06-18 22:10",
-  },
-  {
-    id: 1006,
-    header: "Google announces stock buyback Q1 2026?",
-    type: "Polymarket",
-    sentiment: "Positive",
-    confidence: "51%",
-    published: "2025-06-17 08:30",
-  },
-  {
-    id: 1007,
-    header: "S&P 500 correction >5% in March?",
-    type: "Polymarket",
-    sentiment: "Negative",
-    confidence: "37%",
-    published: "2025-06-16 16:00",
-  },
-  {
-    id: 1008,
-    header: "Meta Platforms revenue beats $42B forecast?",
-    type: "Polymarket",
-    sentiment: "Positive",
-    confidence: "69%",
-    published: "2025-06-15 10:20",
-  },
-]
+/* ─────────── Convert live Polymarket bets → FeedRow[] ─────────── */
+function polymarketToRows(bets: PolymarketBet[]): FeedRow[] {
+  return bets.map((bet, i) => {
+    const signal = bet.composite_signal
+    const sentiment =
+      signal > 0.002 ? "Positive" : signal < -0.002 ? "Negative" : "Neutral"
+    return {
+      id: 3000 + i,
+      header: bet.question,
+      type: "Polymarket",
+      sentiment,
+      confidence: `${bet.probability.toFixed(0)}%`,
+      published: new Date().toISOString().slice(0, 16).replace("T", " "),
+    }
+  })
+}
 
 /* ─────────────── Sentiment badge ─────────────── */
 function SentimentBadge({ value }: { value: string }) {
@@ -539,7 +488,7 @@ function fakeConfidence(i: number): string {
    Main export — self-fetching, no data prop needed
    ════════════════════════════════════════════════════════════════ */
 export function DataTable() {
-  const { ticker } = useTicker()
+  const { ticker, polymarket } = useTicker()
   const [articles, setArticles] = React.useState<FeedRow[]>([])
   const [loading, setLoading] = React.useState(true)
 
@@ -578,13 +527,19 @@ export function DataTable() {
       .finally(() => setLoading(false))
   }, [ticker])
 
+  /* Convert live polymarket data to FeedRows */
+  const polyBets = React.useMemo(
+    () => polymarketToRows(polymarket.markets),
+    [polymarket.markets]
+  )
+
   const allData = React.useMemo(
     () =>
-      [...POLYMARKET_BETS, ...articles].sort(
+      [...polyBets, ...articles].sort(
         (a, b) =>
           new Date(b.published).getTime() - new Date(a.published).getTime()
       ),
-    [articles]
+    [articles, polyBets]
   )
 
   return (
@@ -609,7 +564,7 @@ export function DataTable() {
         <TabsList className="**:data-[slot=badge]:bg-muted-foreground/30 hidden **:data-[slot=badge]:size-5 **:data-[slot=badge]:rounded-full **:data-[slot=badge]:px-1 @4xl/main:flex">
           <TabsTrigger value="all">ALL</TabsTrigger>
           <TabsTrigger value="polymarket-bets">
-            Polymarket bets <Badge variant="secondary">{POLYMARKET_BETS.length}</Badge>
+            Polymarket bets <Badge variant="secondary">{polyBets.length}</Badge>
           </TabsTrigger>
           <TabsTrigger value="article">
             article <Badge variant="secondary">{articles.length}</Badge>
@@ -661,7 +616,21 @@ export function DataTable() {
         value="polymarket-bets"
         className="relative flex flex-col gap-4 overflow-auto px-4 lg:px-6"
       >
-        <FeedTable data={POLYMARKET_BETS} />
+        {polymarket.loading ? (
+          <div className="flex h-40 items-center justify-center gap-2">
+            <span className="text-muted-foreground text-sm">
+              Loading Polymarket bets for {polymarket.company || ticker}…
+            </span>
+          </div>
+        ) : polymarket.error ? (
+          <div className="flex h-40 items-center justify-center gap-2">
+            <span className="text-sm text-destructive">
+              Polymarket: {polymarket.error}
+            </span>
+          </div>
+        ) : (
+          <FeedTable data={polyBets} />
+        )}
       </TabsContent>
 
       {/* article */}

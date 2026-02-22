@@ -13,7 +13,7 @@ import {
   CardTitle,
 } from '@/components/ui/card'
 import { Spinner } from '@/components/ui/spinner'
-import { useTicker } from '@/lib/ticker-context'
+import { useTicker, type PolymarketData } from '@/lib/ticker-context'
 
 interface KpiData {
   ticker: string
@@ -26,7 +26,7 @@ interface KpiData {
 }
 
 export function SectionCards() {
-  const { ticker } = useTicker()
+  const { ticker, polymarket } = useTicker()
   const [data, setData] = React.useState<KpiData | null>(null)
   const [loading, setLoading] = React.useState(true)
   const [error, setError] = React.useState<string | null>(null)
@@ -76,7 +76,7 @@ export function SectionCards() {
         : "text-yellow-500"
 
   return (
-    <div className="*:data-[slot=card]:from-primary/5 *:data-[slot=card]:to-card dark:*:data-[slot=card]:bg-card grid grid-cols-1 gap-4 px-4 *:data-[slot=card]:bg-gradient-to-t *:data-[slot=card]:shadow-xs lg:px-6 @xl/main:grid-cols-2 @5xl/main:grid-cols-4">
+    <div className="*:data-[slot=card]:from-primary/5 *:data-[slot=card]:to-card dark:*:data-[slot=card]:bg-card grid grid-cols-1 gap-4 px-4 *:data-[slot=card]:bg-gradient-to-t *:data-[slot=card]:shadow-xs lg:px-6 @xl/main:grid-cols-2 @5xl/main:grid-cols-5">
       {/* Price */}
       <Card className="@container/card">
         <CardHeader>
@@ -177,6 +177,38 @@ export function SectionCards() {
           </div>
           <div className="text-muted-foreground">
             14-period Relative Strength Index
+          </div>
+        </CardFooter>
+      </Card>
+
+      {/* Polymarket Engouement */}
+      <Card className="@container/card">
+        <CardHeader>
+          <CardDescription>Polymarket Score</CardDescription>
+          <CardTitle className="text-2xl font-semibold tabular-nums @[250px]/card:text-3xl">
+            {polymarket.loading
+              ? "…"
+              : polymarket.error
+                ? "N/A"
+                : (polymarket.global_score * 100).toFixed(1) + "%"}
+          </CardTitle>
+          <CardAction>
+            <Badge variant="outline">
+              {polymarket.markets.length > 0 ? <IconTrendingUp /> : <IconTrendingDown />}
+              {polymarket.markets.length} bet{polymarket.markets.length !== 1 ? "s" : ""}
+            </Badge>
+          </CardAction>
+        </CardHeader>
+        <CardFooter className="flex-col items-start gap-1.5 text-sm">
+          <div className="line-clamp-1 flex gap-2 font-medium">
+            {polymarket.loading
+              ? "Loading…"
+              : polymarket.markets.length > 0
+                ? `Top: ${polymarket.markets[0]?.probability?.toFixed(0)}% YES`
+                : "No active bets"}
+          </div>
+          <div className="text-muted-foreground">
+            Live Polymarket prediction markets
           </div>
         </CardFooter>
       </Card>
