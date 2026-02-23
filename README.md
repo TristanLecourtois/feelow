@@ -49,15 +49,7 @@ cd backend
 python -m pytest tests/ -v
 ```
 
-See [backend/README.md](backend/README.md) for full API reference and architecture details.
-
-
------------- readmAD
-# Feelow 🦈
-Personal Finance Agent based on Polymarket Monitoring
-
-pour toi le goat : 
-
+````
 cd backend
 pip install -r requirements.txt
 uvicorn main:app --reload --port 8000
@@ -65,11 +57,11 @@ uvicorn main:app --reload --port 8000
 cd frontend
 pip install -r requirements.txt
 streamlit run app.py
+```
+
+See [backend/README.md](backend/README.md) for full API reference and architecture details.
 
 
-Feelow est une plateforme d’intelligence de marché cross-market qui détecte les écarts entre ce que “prédit” le collectif sur les prediction markets (ex. Polymarket) et ce que reflètent les marchés financiers réels (prix actions, volatilité, indicateurs techniques).
-
-L’idée centrale : les prediction markets condensent des croyances et des anticipations (probabilités, volumes, variations rapides). En parallèle, les marchés actions intègrent ces informations avec latence, bruit, ou biais. Feelow fusionne ces signaux pour produire un Market Mispricing Score : l’action semble-t-elle sur-valorisée ou sous-valorisée par rapport à l’engouement et aux attentes implicites du marché “événementiel” ?
 
 ## 📊 Features
 
@@ -85,7 +77,7 @@ L’idée centrale : les prediction markets condensent des croyances et des anti
 
 ---
 
-## expert Models Used
+## Expert Models Used
 
 | Model | HuggingFace ID | F1 Score | Best For |
 |-------|---------------|----------|----------|
@@ -95,22 +87,40 @@ L’idée centrale : les prediction markets condensent des croyances et des anti
 
 ---
 
-## ancien Project Structure
+## Project Structure
 
 ```
 feelow/
-├── app.py                    # Main Streamlit application (5 tabs)
-├── config.py                 # Central configuration
-├── requirements.txt          # Python dependencies
-├── README.md                 # This file
-└── src/
-    ├── __init__.py
-    ├── sentiment_engine.py   # Multi-model FinBERT ensemble
-    ├── news_ingestor.py      # RSS + Finviz news fetching
-    ├── market_data.py        # yfinance price data
-    ├── technicals.py         # RSI, MACD, Bollinger, SMA
-    ├── visualizer.py         # Plotly charts (8 chart types)
-    └── claude_analyst.py     # Claude API integration
+├── backend/                          # FastAPI unified API (port 8000)
+│   ├── src/
+│   │   ├── main.py                   # FastAPI app — all endpoints
+│   │   ├── config.py                 # Central config (models, tickers, thresholds)
+│   │   ├── full_pipeline.py          # Polymarket pipeline glue (agent-search → scoring)
+│   │   ├── finance-data/             # Core financial modules
+│   │   │   ├── sentiment_engine.py   # Multi-model FinBERT ensemble
+│   │   │   ├── news_ingestor.py      # RSS headline fetching
+│   │   │   ├── market_data.py        # yfinance price data loader
+│   │   │   ├── technicals.py         # RSI, MACD, Bollinger, SMA, EMA
+│   │   │   ├── gemini_agent.py       # Google Gemini search grounding agent
+│   │   │   └── agent_orchestrator.py # Multi-step agentic pipeline orchestrator
+│   │   ├── agent_search/             # Polymarket LLM search
+│   │   │   ├── polymarket_pipeline.py
+│   │   │   ├── orchestrator.py
+│   │   │   └── scoring/              # Relevance, impact, novelty, sentiment, reliability
+│   │   ├── polymarket-analysis/      # Advanced market scoring
+│   │   │   └── market_scorer.py      # Momentum, volatility, concentration, composite signal
+│   │   └── stock_analysis/           # Reddit-based FinBERT sentiment
+│   │       └── api_finbert_transformer.py
+│   └── tests/
+└── webapp/
+    └── UI-fr/                        # Next.js 15 dashboard (port 3000)
+        ├── app/dashboard/page.tsx    # Main dashboard page
+        ├── lib/ticker-context.tsx    # Global ticker state + API calls
+        └── components/
+            ├── section-cards.tsx           # KPI cards (price, sentiment, RSI, signal)
+            ├── chart-area-interactive.tsx  # OHLCV price chart + Polymarket panel
+            ├── data-table.tsx              # News headlines with sentiment badges
+            └── app-sidebar.tsx             # Ticker selector (Tech / Finance / Crypto)
 ```
 
 ## 🏆 Hackathon Prize Targeting
